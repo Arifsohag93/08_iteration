@@ -193,27 +193,12 @@ ggplot(data = nematode_w,
   geom_point()
 ```
 
-# 5) Loops  
-Different types of loops exist, with `for` and `while` loops being the most popular.  
-
-A `for` loop iterates through positions in a vector and apply the same task to each position, returning a result for each of them.  
-
-Now, let's say I wanted to calculate the mean and CV for each of the response and explanatory variable columns in our data set.  
-
-Since we will be performing the same task across many columns, we could create a loop where, for each column,   
-  - we apply the function `meancv`, 
-  - the function returns back the mean and CV,
-  - the loop appends all the results together  
-  
-Loops are very useful when **repeating the same task across different scenarios**.  
-
-In this case, the **task being repeated is to calculate mean and CV**, and the **different scenarios are the columns**.  
 
 ```{r}
 meancv2 <- function(df, col) {
   # Calculate intermediary steps of mean and sd
 mean <- mean({{df}} %>% pull({{col}}), na.rm = T)
-sd <- sd({{df}}%>% pull({{col}}, na.rm = T)
+sd <- sd({{df}} %>% pull({{col}}), na.rm = T)
   # Calculate cv
 cv <- (sd/mean)*100
 
@@ -232,9 +217,32 @@ meancv2
 
 
 ```{r}
-meancv(nematode_w$rndvi
-       )
+
+meancv2(df = nematode_w,
+       
+       col = rndvi)
+
 ```
+
+
+
+
+# 5) Loops  
+Different types of loops exist, with `for` and `while` loops being the most popular.  
+
+A `for` loop iterates through positions in a vector and apply the same task to each position, returning a result for each of them.  
+
+Now, let's say I wanted to calculate the mean and CV for each of the response and explanatory variable columns in our data set.  
+
+Since we will be performing the same task across many columns, we could create a loop where, for each column,   
+  - we apply the function `meancv`, 
+  - the function returns back the mean and CV,
+  - the loop appends all the results together  
+  
+Loops are very useful when **repeating the same task across different scenarios**.  
+
+In this case, the **task being repeated is to calculate mean and CV**, and the **different scenarios are the columns**.  
+
 
 Let's create a for loop to do that for us.  
 First, let's create an empty data frame scaffold to be populated by the results of the loop.  
@@ -313,17 +321,17 @@ mutate(lm = map(data,
                 ~lm(data = .x,
                     formula = resp_val ~ exp_val
                     )
-                ))
+                )) %>%
   # Extracting R2 for each element  
 mutate(r2 = map(lm,
-                ~summary(.x)$.squared
+                ~summary(.x)$r.squared
                 ))
 
 
-nematode_mods$lm[1]
+nematode_mods$r2[1]
 
 ggplot(data = nematode_w,
-       aes(x = mel_s, y = b)
+       aes(y = mel_s, x = b)
        ) +
   geom_point()+
   geom_smooth(method = "lm")
@@ -348,19 +356,15 @@ nematode_mods_sel
 ```{r}
 nematode_mods_sel_plots <- nematode_mods_sel %>%
   # Making scatterplots with r2 in subtitle
-mutate(splot = map(data,
-                   
-                   ~ggplot(data = .x,
-                           aes(x = exp_val, 
-                               y = resp_val
-                               )) +
-                     geom_point()+
-                     geom_smooth(method = "lm")
-                
-                     
-                     
-                   
-                   ))
+mutate(splot = map2(data,r2,
+                    ~ggplot(data = .x,
+                            aes(x = exp_val,
+                                y = resp_val)
+                            )+
+                      geom_point()+
+                      geom_smooth(method = "lm")+
+                      labs(subtitle = paste("R2:", .y))
+                    )) %>%
   # Making scatterplots with r2 in subtitle, and correct x and y axis titles  
 mutate(splot_better = pmap(list(.df = data,
                                 .r2 = r2,
@@ -368,14 +372,19 @@ mutate(splot_better = pmap(list(.df = data,
                                 .ev = exp_var
                                 ),
                            function(.df, .r2, .rv, .ev)
-                             ggplot(data = .x,
+                               ggplot(data = .df,
                            aes(x = exp_val, 
                                y = resp_val
                                )) +
                      geom_point()+
-                     geom_smooth(method = "lm")
-                           ))
-nematode_mods_sel_plots$plot[1]
+                     geom_smooth(method = "lm")+
+                     labs(subtitle = paste("R2:", .r2),
+                          x = .ev,
+                          y = .rv
+                          )
+                
+))
+nematode_mods_sel_plots$splot_better[1]
 ```
 Now, we had 2 iterating elements to create `splot`, so we needed to use `map2()`.  
 
@@ -383,7 +392,7 @@ Also, with more than 2 iterating elements to create `splot_better`, we used the 
 
 Let's print the first plot:
 ```{r}
-
+nematode_mods_sel_plots$splot_better[1]
 ```
 
 Now, let's print all of the plots  
@@ -391,18 +400,22 @@ Now, let's print all of the plots
 #| warning: false
 #| message: false
 
-
+nematode_mods_sel_plots$splot_better
 ```
 
 Finally, let's save all these plots as one figure.  
 ```{r}
 library(gridExtra)
 
-allplots 
+allplots <- marrangeGrob(nematode_mods_sel_plots$splot_better,
+                         nrow = 4,
+                         ncol = 4
+                         )
 
 allplots
 
-
+ggsave(plot = allplots,
+       "../output/allplots.png")
 ```
 
 
